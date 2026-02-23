@@ -1,0 +1,12 @@
+# Ignore node_modules folder (too large, not needed on GitHub)
+node_modules/
+
+# Ignore environment variable files (contains secrets like DB passwords)
+.env
+
+# Ignore OS junk files
+.DS_Store
+
+# Ignore build output folders
+dist/
+build/
