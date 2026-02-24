@@ -7,12 +7,15 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const productRoutes = require("./routes/productRoutes");
+const orderRoutes = require("./routes/orderRoutes");
 
 const app = express();
 connectDB();
 
 app.use(cors());
 app.use(express.json());
+
+app.use("/api/orders", orderRoutes);
 
 // ─── Mount Routes ─────────────────────────────────────────────────────────────
 app.get("/", (req, res) => res.json({ message: "MERN POS API is running!" }));
