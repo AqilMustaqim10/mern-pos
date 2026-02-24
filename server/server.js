@@ -14,30 +14,9 @@ const settingsRoutes = require("./routes/settingsRoutes");
 const app = express();
 connectDB();
 
-// ─── CORS Configuration ────────────────────────────────────────────────────────
-// In production we need to explicitly allow our Vercel frontend URL
-// process.env.CLIENT_URL will be set in Render's environment variables
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, curl)
-    if (!origin) return callback(null, true);
-
-    const allowedOrigins = [
-      "http://localhost:5173", // local Vite dev server
-      "http://localhost:4173", // local Vite preview
-      process.env.CLIENT_URL, // your Vercel URL (set in Render env vars)
-    ].filter(Boolean); // remove undefined values
-
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS blocked: ${origin}`));
-    }
-  },
-  credentials: true, // allow cookies and auth headers
-};
-
-app.use(cors(corsOptions));
+// ─── CORS — allow all origins ─────────────────────────────────────────────────
+// Simple and reliable — works for all frontends including Vercel
+app.use(cors());
 app.use(express.json());
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
