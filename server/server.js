@@ -14,12 +14,13 @@ const settingsRoutes = require("./routes/settingsRoutes");
 const app = express();
 connectDB();
 
-// ─── CORS — allow all origins ─────────────────────────────────────────────────
-// Simple and reliable — works for all frontends including Vercel
-app.use(cors());
+// ─── CORS — must be BEFORE all routes ─────────────────────────────────────────
+app.use(cors()); // allow all origins
+app.options("*", cors()); // handle preflight requests for ALL routes
+app.options("*", cors()); // this handles OPTIONS preflight requests
+
 app.use(express.json());
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
 app.get("/", (req, res) => res.json({ message: "MERN POS API is running!" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/categories", categoryRoutes);
@@ -29,7 +30,6 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/settings", settingsRoutes);
 
-// ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res
