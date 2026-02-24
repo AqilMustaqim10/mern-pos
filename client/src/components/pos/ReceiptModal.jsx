@@ -1,8 +1,10 @@
 import React, { useRef } from "react";
+import { useSettings } from "../../context/SettingsContext";
 
 const ReceiptModal = ({ order, onClose }) => {
   // ref to the receipt div so we can print it
   const receiptRef = useRef();
+  const { settings } = useSettings();
 
   // ─── Handle Print ──────────────────────────────────────────────────────────
   const handlePrint = () => {
@@ -43,9 +45,11 @@ const ReceiptModal = ({ order, onClose }) => {
         <div ref={receiptRef} style={styles.receipt}>
           {/* Store Header */}
           <div style={{ textAlign: "center", marginBottom: "16px" }}>
-            <h2 style={{ fontSize: "20px", fontWeight: "800" }}>🛒 MERN POS</h2>
-            <p style={{ color: "#718096", fontSize: "12px" }}>
-              Thank you for your purchase!
+            <h2 style={{ fontSize: "20px", fontWeight: "800" }}>
+              {settings?.storeName || "MERN POS"}
+            </h2>
+            <p style={{ fontSize: "12px", color: "#718096" }}>
+              {settings?.storeAddress}
             </p>
           </div>
 
@@ -153,7 +157,7 @@ const ReceiptModal = ({ order, onClose }) => {
               fontSize: "12px",
             }}
           >
-            <p>*** Thank you, come again! ***</p>
+            <p>*** {settings?.receiptFooter || "Thank you, come again!"} ***</p>
           </div>
         </div>
 

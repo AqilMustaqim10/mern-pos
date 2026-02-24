@@ -20,6 +20,7 @@ const AdminLayout = ({ children }) => {
     { path: "/admin/products", label: "📦 Products" },
     { path: "/admin/orders", label: "🧾 Orders" },
     { path: "/admin/users", label: "👥 Users" },
+    { path: "/admin/settings", label: "⚙️ Settings" },
     { path: "/pos", label: "🛒 POS Screen" },
   ];
 

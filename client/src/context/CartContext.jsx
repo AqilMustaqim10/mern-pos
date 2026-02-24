@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
+import { useSettings } from "./SettingsContext";
 
 // Create the cart context
 const CartContext = createContext();
@@ -12,7 +13,8 @@ export const CartProvider = ({ children }) => {
   const [discountPercent, setDiscountPercent] = useState(0);
 
   // Tax rate (can be changed in settings later, hardcode for now)
-  const [taxRate] = useState(0); // set to 6 for 6% SST if needed
+  const { settings } = useSettings();
+  const taxRate = settings?.taxEnabled ? settings?.taxRate || 0 : 0;
 
   // ─── Add Item to Cart ──────────────────────────────────────────────────────
   const addToCart = (product) => {
