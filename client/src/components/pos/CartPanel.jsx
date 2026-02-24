@@ -3,12 +3,15 @@ import { useCart } from "../../context/CartContext";
 import { useAuth } from "../../context/AuthContext";
 import { createOrder } from "../../api/orderAPI";
 import toast from "react-hot-toast";
+import { useClickFeedback } from "../../hooks/useAnimation";
 
 const CartPanel = ({ onOrderComplete }) => {
   const {
     cartItems,
     discountPercent,
     setDiscountPercent,
+    taxBreakdown,
+    totalTaxAmount,
     taxRate,
     removeFromCart,
     updateQuantity,
@@ -19,6 +22,9 @@ const CartPanel = ({ onOrderComplete }) => {
     totalAmount,
     totalItems,
   } = useCart();
+
+  const { ref: chargeBtnRef, triggerFeedback } = useClickFeedback();
+  const [tableNumber, setTableNumber] = useState("");
 
   const { user } = useAuth();
 
@@ -59,13 +65,15 @@ const CartPanel = ({ onOrderComplete }) => {
         items: cartItems.map((item) => ({
           productId: item._id,
           quantity: item.quantity,
+          note: item.note || "",
         })),
         discountPercent: Number(discountPercent),
-        taxRate,
         paymentMethod,
         amountPaid: paymentMethod === "cash" ? Number(amountPaid) : totalAmount,
         customerName: customerName || "Walk-in Customer",
+        tableNumber,
       };
+      setTableNumber("");
 
       const res = await createOrder(orderData);
 
@@ -103,13 +111,24 @@ const CartPanel = ({ onOrderComplete }) => {
 
       {/* ── Customer Name ── */}
       <div style={styles.customerRow}>
-        <input
-          type="text"
-          placeholder="Customer name (optional)"
-          value={customerName}
-          onChange={(e) => setCustomerName(e.target.value)}
-          style={styles.customerInput}
-        />
+        <div style={{ display: "flex", gap: "8px" }}>
+          {/* Customer name */}
+          <input
+            type="text"
+            placeholder="Customer name"
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            style={{ ...styles.customerInput, flex: 2 }}
+          />
+          {/* Table number */}
+          <input
+            type="text"
+            placeholder="Table #"
+            value={tableNumber}
+            onChange={(e) => setTableNumber(e.target.value)}
+            style={{ ...styles.customerInput, flex: 1 }}
+          />
+        </div>
       </div>
 
       {/* ── Cart Items ── */}
@@ -123,8 +142,16 @@ const CartPanel = ({ onOrderComplete }) => {
             </p>
           </div>
         ) : (
-          cartItems.map((item) => (
-            <div key={item._id} style={styles.cartItem}>
+          cartItems.map((item, index) => (
+            <div
+              key={item._id}
+              className="cart-item-enter"
+              style={{
+                ...styles.cartItem,
+                // Each new item animates in with slight delay based on position
+                animation: `slideInRight 0.18s ease-out ${index * 20}ms both`,
+              }}
+            >
               {/* Item name and price */}
               <div style={styles.itemInfo}>
                 <p style={styles.itemName}>{item.name}</p>
@@ -133,31 +160,29 @@ const CartPanel = ({ onOrderComplete }) => {
 
               {/* Quantity controls */}
               <div style={styles.qtyControls}>
-                {/* Decrease button */}
                 <button
                   onClick={() => updateQuantity(item._id, item.quantity - 1)}
                   style={styles.qtyBtn}
+                  className="btn-press"
                 >
                   −
                 </button>
-
                 <span style={styles.qty}>{item.quantity}</span>
-
-                {/* Increase button */}
                 <button
                   onClick={() => updateQuantity(item._id, item.quantity + 1)}
                   style={styles.qtyBtn}
+                  className="btn-press"
                 >
                   +
                 </button>
               </div>
 
-              {/* Item subtotal and remove button */}
               <div style={styles.itemRight}>
                 <p style={styles.itemSubtotal}>RM {item.subtotal.toFixed(2)}</p>
                 <button
                   onClick={() => removeFromCart(item._id)}
                   style={styles.removeBtn}
+                  className="btn-press"
                 >
                   ✕
                 </button>
@@ -201,13 +226,15 @@ const CartPanel = ({ onOrderComplete }) => {
             </div>
           )}
 
-          {/* Tax */}
-          {taxRate > 0 && (
-            <div style={styles.summaryRow}>
-              <span style={styles.summaryLabel}>Tax ({taxRate}%)</span>
-              <span>RM {taxAmount.toFixed(2)}</span>
+          {/* Compound tax lines — one row per active tax */}
+          {taxBreakdown.map((tax, i) => (
+            <div key={i} style={styles.summaryRow}>
+              <span style={styles.summaryLabel}>
+                {tax.name} ({tax.rate}%)
+              </span>
+              <span>RM {tax.amount.toFixed(2)}</span>
             </div>
-          )}
+          ))}
 
           {/* Divider */}
           <div style={styles.divider} />
@@ -277,12 +304,21 @@ const CartPanel = ({ onOrderComplete }) => {
 
           {/* Charge Button */}
           <button
+            ref={chargeBtnRef}
             onClick={handleCheckout}
             disabled={
               processing ||
               (paymentMethod === "cash" &&
                 (!amountPaid || Number(amountPaid) < totalAmount))
             }
+            // Add pulse animation when charge is ready
+            className={`btn-press ${
+              !processing &&
+              (paymentMethod !== "cash" ||
+                (amountPaid && Number(amountPaid) >= totalAmount))
+                ? "charge-btn-ready"
+                : ""
+            }`}
             style={{
               ...styles.chargeBtn,
               opacity: processing ? 0.7 : 1,

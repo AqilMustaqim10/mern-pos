@@ -1,66 +1,61 @@
+// server/models/Settings.js
+
 const mongoose = require("mongoose");
 
-// Settings is a SINGLETON document — only one document ever exists
-// We always find it with Settings.findOne() and update it
+// ─── Tax Entry Sub-Schema ──────────────────────────────────────────────────────
+// Each tax is its own document inside the taxes array
+// Example: { name: 'Service Charge', rate: 10, enabled: true, order: 1 }
+const taxEntrySchema = new mongoose.Schema({
+  // Display name on receipt e.g. "Service Charge", "SST"
+  name: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+
+  // Percentage rate e.g. 10 for 10%
+  rate: {
+    type: Number,
+    required: true,
+    min: 0,
+    max: 100,
+  },
+
+  // Whether this tax is currently active
+  enabled: {
+    type: Boolean,
+    default: true,
+  },
+
+  // Order of application for compound tax
+  // Lower number = applied first
+  // e.g. Service Charge order:1, SST order:2
+  // SST is then calculated on (subtotal + service charge)
+  order: {
+    type: Number,
+    default: 1,
+  },
+});
+
 const settingsSchema = new mongoose.Schema(
   {
-    // Store information
-    storeName: {
-      type: String,
-      default: "My POS Store",
-      trim: true,
-    },
-    storeAddress: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-    storePhone: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-    storeEmail: {
-      type: String,
-      default: "",
-      trim: true,
+    storeName: { type: String, default: "My POS Store", trim: true },
+    storeAddress: { type: String, default: "", trim: true },
+    storePhone: { type: String, default: "", trim: true },
+    storeEmail: { type: String, default: "", trim: true },
+
+    // ── NEW: Array of tax entries instead of single tax ──
+    // Replaces old taxEnabled, taxRate, taxName fields
+    taxes: {
+      type: [taxEntrySchema],
+      default: [], // no taxes by default
     },
 
-    // Tax configuration
-    taxEnabled: {
-      type: Boolean,
-      default: false, // tax is off by default
-    },
-    taxRate: {
-      type: Number,
-      default: 0, // percentage e.g. 6 for 6% SST
-      min: 0,
-      max: 100,
-    },
-    taxName: {
-      type: String,
-      default: "SST", // tax label shown on receipt
-    },
-
-    // Receipt configuration
-    receiptFooter: {
-      type: String,
-      default: "Thank you for your purchase!",
-    },
-
-    // Currency
-    currency: {
-      type: String,
-      default: "RM",
-    },
-    currencySymbol: {
-      type: String,
-      default: "RM",
-    },
+    receiptFooter: { type: String, default: "Thank you for your purchase!" },
+    currency: { type: String, default: "RM" },
+    currencySymbol: { type: String, default: "RM" },
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
 const Settings = mongoose.model("Settings", settingsSchema);

@@ -1,16 +1,18 @@
-import React, { useRef } from "react";
+// client/src/components/pos/ReceiptModal.jsx
+
+import React, { useRef, useState } from "react";
 import { useSettings } from "../../context/SettingsContext";
+import KitchenTicket from "./KitchenTicket";
 
 const ReceiptModal = ({ order, onClose }) => {
-  // ref to the receipt div so we can print it
   const receiptRef = useRef();
   const { settings } = useSettings();
 
-  // ─── Handle Print ──────────────────────────────────────────────────────────
-  const handlePrint = () => {
-    // Open a new browser window just for printing
-    const printWindow = window.open("", "_blank");
+  // Controls whether kitchen ticket modal is showing
+  const [showKitchen, setShowKitchen] = useState(false);
 
+  const handlePrint = () => {
+    const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html>
         <head>
@@ -21,157 +23,197 @@ const ReceiptModal = ({ order, onClose }) => {
             .divider { border-top: 1px dashed #000; margin: 8px 0; }
             .row { display: flex; justify-content: space-between; margin: 4px 0; }
             .bold { font-weight: bold; }
-            .total { font-size: 16px; font-weight: bold; }
           </style>
         </head>
-        <body>
-          ${receiptRef.current.innerHTML}
-        </body>
+        <body>${receiptRef.current.innerHTML}</body>
       </html>
     `);
-
     printWindow.document.close();
     printWindow.focus();
-    printWindow.print(); // trigger print dialog
+    printWindow.print();
     printWindow.close();
   };
 
   if (!order) return null;
 
   return (
-    <div style={styles.overlay}>
-      <div style={styles.modal}>
-        {/* Receipt Content */}
-        <div ref={receiptRef} style={styles.receipt}>
-          {/* Store Header */}
-          <div style={{ textAlign: "center", marginBottom: "16px" }}>
-            <h2 style={{ fontSize: "20px", fontWeight: "800" }}>
-              {settings?.storeName || "MERN POS"}
-            </h2>
-            <p style={{ fontSize: "12px", color: "#718096" }}>
-              {settings?.storeAddress}
-            </p>
-          </div>
-
-          {/* Order Info */}
-          <div style={styles.receiptRow}>
-            <span style={styles.receiptLabel}>Order No:</span>
-            <span style={styles.receiptValue}>{order.orderNumber}</span>
-          </div>
-          <div style={styles.receiptRow}>
-            <span style={styles.receiptLabel}>Date:</span>
-            <span style={styles.receiptValue}>
-              {new Date(order.createdAt).toLocaleString()}
-            </span>
-          </div>
-          <div style={styles.receiptRow}>
-            <span style={styles.receiptLabel}>Cashier:</span>
-            <span style={styles.receiptValue}>{order.cashier?.name}</span>
-          </div>
-          <div style={styles.receiptRow}>
-            <span style={styles.receiptLabel}>Customer:</span>
-            <span style={styles.receiptValue}>{order.customerName}</span>
-          </div>
-
-          {/* Divider */}
-          <div style={styles.divider} />
-
-          {/* Items */}
-          {order.items.map((item, index) => (
-            <div key={index} style={styles.itemRow}>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: "600", fontSize: "13px" }}>
-                  {item.name}
+    <>
+      <div style={styles.overlay} className="modal-overlay">
+        <div style={styles.modal} className="modal-content">
+          {/* Receipt Content */}
+          <div ref={receiptRef} style={styles.receipt}>
+            {/* Store Header */}
+            <div style={{ textAlign: "center", marginBottom: "16px" }}>
+              <h2 style={{ fontSize: "20px", fontWeight: "800" }}>
+                {settings?.storeName || "MERN POS"}
+              </h2>
+              {settings?.storeAddress && (
+                <p style={{ color: "#718096", fontSize: "11px" }}>
+                  {settings.storeAddress}
                 </p>
-                <p style={{ color: "#718096", fontSize: "12px" }}>
-                  RM {item.price.toFixed(2)} × {item.quantity}
+              )}
+              {settings?.storePhone && (
+                <p style={{ color: "#718096", fontSize: "11px" }}>
+                  {settings.storePhone}
                 </p>
+              )}
+            </div>
+
+            {/* Order Info */}
+            {[
+              { label: "Order No", value: order.orderNumber },
+              {
+                label: "Date",
+                value: new Date(order.createdAt).toLocaleString(),
+              },
+              { label: "Cashier", value: order.cashier?.name },
+              { label: "Customer", value: order.customerName },
+              order.tableNumber && { label: "Table", value: order.tableNumber },
+            ]
+              .filter(Boolean)
+              .map((row) => (
+                <div key={row.label} style={styles.receiptRow}>
+                  <span style={styles.receiptLabel}>{row.label}:</span>
+                  <span style={styles.receiptValue}>{row.value}</span>
+                </div>
+              ))}
+
+            <div style={styles.divider} />
+
+            {/* Items */}
+            {order.items.map((item, i) => (
+              <div key={i} style={styles.itemRow}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontWeight: "600", fontSize: "13px" }}>
+                    {item.name}
+                  </p>
+                  {item.note && (
+                    <p
+                      style={{
+                        color: "#a0aec0",
+                        fontSize: "11px",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Note: {item.note}
+                    </p>
+                  )}
+                  <p style={{ color: "#718096", fontSize: "12px" }}>
+                    RM {item.price.toFixed(2)} × {item.quantity}
+                  </p>
+                </div>
+                <span style={{ fontWeight: "700", fontSize: "13px" }}>
+                  RM {item.subtotal.toFixed(2)}
+                </span>
               </div>
-              <span style={{ fontWeight: "700", fontSize: "13px" }}>
-                RM {item.subtotal.toFixed(2)}
-              </span>
-            </div>
-          ))}
+            ))}
 
-          <div style={styles.divider} />
+            <div style={styles.divider} />
 
-          {/* Totals */}
-          <div style={styles.receiptRow}>
-            <span>Subtotal</span>
-            <span>RM {order.subtotal.toFixed(2)}</span>
-          </div>
-
-          {order.discountAmount > 0 && (
-            <div style={{ ...styles.receiptRow, color: "#48bb78" }}>
-              <span>Discount ({order.discountPercent}%)</span>
-              <span>− RM {order.discountAmount.toFixed(2)}</span>
-            </div>
-          )}
-
-          {order.taxAmount > 0 && (
+            {/* Totals */}
             <div style={styles.receiptRow}>
-              <span>Tax ({order.taxRate}%)</span>
-              <span>RM {order.taxAmount.toFixed(2)}</span>
+              <span>Subtotal</span>
+              <span>RM {order.subtotal.toFixed(2)}</span>
             </div>
-          )}
 
-          <div style={styles.divider} />
+            {order.discountAmount > 0 && (
+              <div style={{ ...styles.receiptRow, color: "#48bb78" }}>
+                <span>Discount ({order.discountPercent}%)</span>
+                <span>− RM {order.discountAmount.toFixed(2)}</span>
+              </div>
+            )}
 
-          <div
-            style={{
-              ...styles.receiptRow,
-              fontSize: "18px",
-              fontWeight: "800",
-            }}
-          >
-            <span>TOTAL</span>
-            <span>RM {order.totalAmount.toFixed(2)}</span>
-          </div>
+            {/* ── Compound tax lines — one row per tax ── */}
+            {(order.taxBreakdown || []).map((tax, i) => (
+              <div key={i} style={styles.receiptRow}>
+                <span>
+                  {tax.name} ({tax.rate}%)
+                </span>
+                <span>RM {tax.amount.toFixed(2)}</span>
+              </div>
+            ))}
 
-          <div
-            style={{ ...styles.receiptRow, color: "#718096", fontSize: "13px" }}
-          >
-            <span>Payment ({order.paymentMethod})</span>
-            <span>RM {order.amountPaid.toFixed(2)}</span>
-          </div>
+            <div style={styles.divider} />
 
-          {order.changeAmount > 0 && (
             <div
               style={{
                 ...styles.receiptRow,
-                color: "#48bb78",
-                fontWeight: "700",
+                fontSize: "18px",
+                fontWeight: "800",
               }}
             >
-              <span>Change</span>
-              <span>RM {order.changeAmount.toFixed(2)}</span>
+              <span>TOTAL</span>
+              <span>RM {order.totalAmount.toFixed(2)}</span>
             </div>
-          )}
+            <div
+              style={{
+                ...styles.receiptRow,
+                color: "#718096",
+                fontSize: "13px",
+              }}
+            >
+              <span>Payment ({order.paymentMethod})</span>
+              <span>RM {order.amountPaid.toFixed(2)}</span>
+            </div>
+            {order.changeAmount > 0 && (
+              <div
+                style={{
+                  ...styles.receiptRow,
+                  color: "#48bb78",
+                  fontWeight: "700",
+                }}
+              >
+                <span>Change</span>
+                <span>RM {order.changeAmount.toFixed(2)}</span>
+              </div>
+            )}
 
-          {/* Footer */}
-          <div
-            style={{
-              textAlign: "center",
-              marginTop: "20px",
-              color: "#a0aec0",
-              fontSize: "12px",
-            }}
-          >
-            <p>*** {settings?.receiptFooter || "Thank you, come again!"} ***</p>
+            <div
+              style={{
+                textAlign: "center",
+                marginTop: "20px",
+                color: "#a0aec0",
+                fontSize: "12px",
+              }}
+            >
+              <p>
+                *** {settings?.receiptFooter || "Thank you, come again!"} ***
+              </p>
+            </div>
+          </div>
+
+          {/* ── Action Buttons — 3 buttons now ── */}
+          <div style={styles.btnRow}>
+            <button
+              onClick={handlePrint}
+              style={styles.printBtn}
+              className="btn-press"
+            >
+              🖨️ Customer Receipt
+            </button>
+            <button
+              onClick={() => setShowKitchen(true)}
+              style={styles.kitchenBtn}
+              className="btn-press"
+            >
+              🍳 Kitchen Ticket
+            </button>
+            <button
+              onClick={onClose}
+              style={styles.closeBtn}
+              className="btn-press"
+            >
+              New Order
+            </button>
           </div>
         </div>
-
-        {/* Action Buttons */}
-        <div style={styles.btnRow}>
-          <button onClick={handlePrint} style={styles.printBtn}>
-            🖨️ Print Receipt
-          </button>
-          <button onClick={onClose} style={styles.closeBtn}>
-            New Order
-          </button>
-        </div>
       </div>
-    </div>
+
+      {/* Kitchen Ticket Modal — renders on top of receipt modal */}
+      {showKitchen && (
+        <KitchenTicket order={order} onClose={() => setShowKitchen(false)} />
+      )}
+    </>
   );
 };
 
@@ -214,7 +256,7 @@ const styles = {
     alignItems: "flex-start",
     marginBottom: "10px",
   },
-  btnRow: { display: "flex", gap: "12px", marginTop: "24px" },
+  btnRow: { display: "flex", gap: "8px", marginTop: "24px" },
   printBtn: {
     flex: 1,
     padding: "12px",
@@ -224,6 +266,18 @@ const styles = {
     borderRadius: "8px",
     cursor: "pointer",
     fontWeight: "600",
+    fontSize: "13px",
+  },
+  kitchenBtn: {
+    flex: 1,
+    padding: "12px",
+    backgroundColor: "#c05621",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "600",
+    fontSize: "13px",
   },
   closeBtn: {
     flex: 1,
@@ -234,6 +288,7 @@ const styles = {
     borderRadius: "8px",
     cursor: "pointer",
     fontWeight: "600",
+    fontSize: "13px",
   },
 };
 

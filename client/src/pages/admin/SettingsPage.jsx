@@ -12,6 +12,7 @@ const SettingsPage = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [taxForm, setTaxForm] = useState({ taxes: [] });
 
   // Store settings form state
   const [storeForm, setStoreForm] = useState({
@@ -22,13 +23,6 @@ const SettingsPage = () => {
     currency: "RM",
     currencySymbol: "RM",
     receiptFooter: "",
-  });
-
-  // Tax settings form state
-  const [taxForm, setTaxForm] = useState({
-    taxEnabled: false,
-    taxRate: 0,
-    taxName: "SST",
   });
 
   // Change password form state
@@ -50,7 +44,6 @@ const SettingsPage = () => {
       const res = await fetchSettings();
       const s = res.data.settings;
 
-      // Populate store form
       setStoreForm({
         storeName: s.storeName || "",
         storeAddress: s.storeAddress || "",
@@ -61,12 +54,8 @@ const SettingsPage = () => {
         receiptFooter: s.receiptFooter || "",
       });
 
-      // Populate tax form
-      setTaxForm({
-        taxEnabled: s.taxEnabled || false,
-        taxRate: s.taxRate || 0,
-        taxName: s.taxName || "SST",
-      });
+      // ← The key fix: always fallback to [] if taxes is missing
+      setTaxForm({ taxes: s.taxes || [] });
     } catch (error) {
       toast.error("Failed to load settings");
     } finally {
@@ -90,15 +79,40 @@ const SettingsPage = () => {
   };
 
   // ─── Save Tax Settings ─────────────────────────────────────────────────────
-  const handleSaveTax = async (e) => {
-    e.preventDefault();
+  const addTax = () => {
+    const nextOrder = taxForm.taxes.length + 1;
+    setTaxForm({
+      taxes: [
+        ...taxForm.taxes,
+        { name: "", rate: 0, enabled: true, order: nextOrder },
+      ],
+    });
+  };
+
+  // Update a specific field of a specific tax
+  const updateTax = (index, field, value) => {
+    const updated = [...taxForm.taxes];
+    updated[index] = { ...updated[index], [field]: value };
+    setTaxForm({ taxes: updated });
+  };
+
+  // Remove a tax entry
+  const removeTax = (index) => {
+    const updated = taxForm.taxes.filter((_, i) => i !== index);
+    // Re-number orders after deletion
+    const renumbered = updated.map((t, i) => ({ ...t, order: i + 1 }));
+    setTaxForm({ taxes: renumbered });
+  };
+
+  // Save taxes
+  const handleSaveTax = async () => {
     setSaving(true);
     try {
-      await updateSettings(taxForm);
+      await updateSettings({ taxes: taxForm.taxes });
       refreshSettings();
       toast.success("Tax settings saved!");
     } catch (error) {
-      toast.error("Failed to save tax settings");
+      toast.error("Failed to save");
     } finally {
       setSaving(false);
     }
@@ -252,89 +266,176 @@ const SettingsPage = () => {
         {/* ── Tax Configuration ── */}
         <div style={styles.card}>
           <h2 style={styles.cardTitle}>🧾 Tax Configuration</h2>
-          <p style={styles.cardDesc}>Configure tax applied at checkout</p>
+          <p style={styles.cardDesc}>
+            Compound taxes — each tax applies on top of the previous running
+            total. Drag to reorder (lower order number = applied first).
+          </p>
 
-          <form onSubmit={handleSaveTax}>
-            {/* Tax toggle */}
-            <div style={styles.toggleRow}>
-              <div>
-                <p style={styles.label}>Enable Tax</p>
-                <p style={{ fontSize: "12px", color: "#a0aec0" }}>
-                  Apply tax to all orders
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  setTaxForm({ ...taxForm, taxEnabled: !taxForm.taxEnabled })
-                }
+          {/* Tax entries list */}
+          <div style={{ marginBottom: "20px" }}>
+            {taxForm.taxes.length === 0 ? (
+              <div
                 style={{
-                  ...styles.toggleSwitch,
-                  backgroundColor: taxForm.taxEnabled ? "#4f46e5" : "#cbd5e0",
+                  textAlign: "center",
+                  padding: "24px",
+                  color: "#a0aec0",
+                  backgroundColor: "#f7fafc",
+                  borderRadius: "8px",
                 }}
               >
-                <div
-                  style={{
-                    ...styles.toggleThumb,
-                    transform: taxForm.taxEnabled
-                      ? "translateX(24px)"
-                      : "translateX(2px)",
-                  }}
-                />
-              </button>
-            </div>
+                No taxes configured. Add one below.
+              </div>
+            ) : (
+              taxForm.taxes
+                .sort((a, b) => a.order - b.order) // show in application order
+                .map((tax, index) => (
+                  <div
+                    key={index}
+                    style={taxStyles.taxRow}
+                    className="anim-slideInRight"
+                  >
+                    {/* Order number badge */}
+                    <div style={taxStyles.orderBadge}>{tax.order}</div>
 
-            {/* Tax fields — only show if tax is enabled */}
-            {taxForm.taxEnabled && (
-              <>
-                <div style={styles.field}>
-                  <label style={styles.label}>Tax Name</label>
-                  <input
-                    value={taxForm.taxName}
-                    onChange={(e) =>
-                      setTaxForm({ ...taxForm, taxName: e.target.value })
-                    }
-                    placeholder="SST, GST, VAT..."
-                    style={styles.input}
-                  />
-                </div>
-                <div style={styles.field}>
-                  <label style={styles.label}>Tax Rate (%)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    value={taxForm.taxRate}
-                    onChange={(e) =>
-                      setTaxForm({
-                        ...taxForm,
-                        taxRate: Number(e.target.value),
-                      })
-                    }
-                    style={styles.input}
-                  />
-                </div>
+                    {/* Tax name */}
+                    <input
+                      value={tax.name}
+                      onChange={(e) => updateTax(index, "name", e.target.value)}
+                      placeholder="Tax name"
+                      style={{ ...taxStyles.taxInput, flex: 2 }}
+                    />
 
-                {/* Preview */}
-                <div style={styles.taxPreview}>
-                  <p style={{ fontSize: "13px", color: "#4a5568" }}>
-                    Example: RM 100.00 item →
-                    <strong style={{ color: "#4f46e5" }}>
-                      {" "}
-                      RM {(100 + 100 * (taxForm.taxRate / 100)).toFixed(2)}
-                    </strong>{" "}
-                    (RM {(100 * (taxForm.taxRate / 100)).toFixed(2)}{" "}
-                    {taxForm.taxName})
-                  </p>
-                </div>
-              </>
+                    {/* Rate */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={tax.rate}
+                        onChange={(e) =>
+                          updateTax(index, "rate", Number(e.target.value))
+                        }
+                        style={{ ...taxStyles.taxInput, width: "70px" }}
+                      />
+                      <span style={{ color: "#718096", fontSize: "14px" }}>
+                        %
+                      </span>
+                    </div>
+
+                    {/* Enable/disable toggle */}
+                    <button
+                      type="button"
+                      onClick={() => updateTax(index, "enabled", !tax.enabled)}
+                      style={{
+                        ...taxStyles.toggleBtn,
+                        backgroundColor: tax.enabled ? "#4f46e5" : "#cbd5e0",
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...taxStyles.toggleThumb,
+                          transform: tax.enabled
+                            ? "translateX(20px)"
+                            : "translateX(2px)",
+                        }}
+                      />
+                    </button>
+
+                    {/* Delete */}
+                    <button
+                      type="button"
+                      onClick={() => removeTax(index)}
+                      style={taxStyles.deleteBtn}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))
             )}
+          </div>
 
-            <button type="submit" disabled={saving} style={styles.saveBtn}>
-              {saving ? "Saving..." : "Save Tax Settings"}
-            </button>
-          </form>
+          {/* Add new tax button */}
+          <button type="button" onClick={addTax} style={taxStyles.addTaxBtn}>
+            + Add Tax
+          </button>
+
+          {/* Compound preview */}
+          {taxForm.taxes.filter((t) => t.enabled).length > 0 && (
+            <div style={taxStyles.preview}>
+              <p
+                style={{
+                  fontSize: "13px",
+                  fontWeight: "700",
+                  marginBottom: "8px",
+                  color: "#4a5568",
+                }}
+              >
+                Preview on RM 100.00:
+              </p>
+              {(() => {
+                // Calculate compound preview
+                let running = 100;
+                return taxForm.taxes
+                  .filter((t) => t.enabled)
+                  .sort((a, b) => a.order - b.order)
+                  .map((tax, i) => {
+                    const base = running;
+                    const amount = base * (tax.rate / 100);
+                    running += amount;
+                    return (
+                      <p
+                        key={i}
+                        style={{
+                          fontSize: "12px",
+                          color: "#718096",
+                          marginBottom: "2px",
+                        }}
+                      >
+                        {tax.name} {tax.rate}% on RM {base.toFixed(2)} = +RM{" "}
+                        {amount.toFixed(2)}
+                        &nbsp;→ Running total: RM {running.toFixed(2)}
+                      </p>
+                    );
+                  });
+              })()}
+              <p
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "800",
+                  color: "#4f46e5",
+                  marginTop: "8px",
+                }}
+              >
+                Final: RM{" "}
+                {(() => {
+                  let r = 100;
+                  taxForm.taxes
+                    .filter((t) => t.enabled)
+                    .sort((a, b) => a.order - b.order)
+                    .forEach((t) => {
+                      r += r * (t.rate / 100);
+                    });
+                  return r.toFixed(2);
+                })()}
+              </p>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSaveTax}
+            disabled={saving}
+            style={{ ...styles.saveBtn, marginTop: "16px" }}
+          >
+            {saving ? "Saving..." : "Save Tax Settings"}
+          </button>
         </div>
 
         {/* ── Change Password ── */}
@@ -532,6 +633,7 @@ const styles = {
     padding: "12px",
     marginBottom: "16px",
   },
+
   accountInfo: { display: "flex", gap: "20px", alignItems: "flex-start" },
   accountAvatar: {
     width: "64px",
@@ -557,6 +659,84 @@ const styles = {
   },
   accountLabel: { fontSize: "13px", color: "#718096", fontWeight: "600" },
   accountValue: { fontSize: "14px", color: "#2d3748", fontWeight: "600" },
+};
+const taxStyles = {
+  taxRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    marginBottom: "10px",
+    padding: "10px",
+    backgroundColor: "#f7fafc",
+    borderRadius: "8px",
+  },
+  orderBadge: {
+    width: "24px",
+    height: "24px",
+    backgroundColor: "#4f46e5",
+    color: "white",
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "12px",
+    fontWeight: "800",
+    flexShrink: 0,
+  },
+  taxInput: {
+    padding: "8px 10px",
+    border: "1px solid #e2e8f0",
+    borderRadius: "6px",
+    fontSize: "14px",
+    backgroundColor: "white",
+  },
+  toggleBtn: {
+    width: "44px",
+    height: "24px",
+    borderRadius: "12px",
+    border: "none",
+    cursor: "pointer",
+    position: "relative",
+    transition: "background 0.2s",
+    padding: 0,
+    flexShrink: 0,
+  },
+  toggleThumb: {
+    width: "20px",
+    height: "20px",
+    backgroundColor: "white",
+    borderRadius: "50%",
+    position: "absolute",
+    top: "2px",
+    transition: "transform 0.2s",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+  },
+  deleteBtn: {
+    background: "none",
+    border: "none",
+    color: "#fc8181",
+    cursor: "pointer",
+    fontSize: "16px",
+    fontWeight: "700",
+    padding: "4px",
+  },
+  addTaxBtn: {
+    width: "100%",
+    padding: "10px",
+    backgroundColor: "#ebf4ff",
+    color: "#4f46e5",
+    border: "2px dashed #bee3f8",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "700",
+    fontSize: "14px",
+  },
+  preview: {
+    backgroundColor: "#f7fafc",
+    borderRadius: "8px",
+    padding: "14px",
+    marginTop: "16px",
+  },
 };
 
 export default SettingsPage;

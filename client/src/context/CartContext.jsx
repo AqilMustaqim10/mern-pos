@@ -1,29 +1,27 @@
+// client/src/context/CartContext.jsx
+
 import React, { createContext, useContext, useState } from "react";
 import { useSettings } from "./SettingsContext";
 
-// Create the cart context
 const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
-  // Cart items array
-  // Each item: { _id, name, price, image, quantity, subtotal }
   const [cartItems, setCartItems] = useState([]);
-
-  // Discount percentage entered by cashier
   const [discountPercent, setDiscountPercent] = useState(0);
 
-  // Tax rate (can be changed in settings later, hardcode for now)
+  // Get live tax settings from context
   const { settings } = useSettings();
-  const taxRate = settings?.taxEnabled ? settings?.taxRate || 0 : 0;
 
-  // ─── Add Item to Cart ──────────────────────────────────────────────────────
+  // Get enabled taxes sorted by their application order
+  const activeTaxes = (settings?.taxes || [])
+    .filter((t) => t.enabled)
+    .sort((a, b) => a.order - b.order);
+
+  // ─── Cart Actions ──────────────────────────────────────────────────────────
   const addToCart = (product) => {
     setCartItems((prev) => {
-      // Check if product is already in cart
       const existing = prev.find((item) => item._id === product._id);
-
       if (existing) {
-        // If already in cart, just increase quantity by 1
         return prev.map((item) =>
           item._id === product._id
             ? {
@@ -34,8 +32,6 @@ export const CartProvider = ({ children }) => {
             : item,
         );
       }
-
-      // If not in cart, add as new item with quantity 1
       return [
         ...prev,
         {
@@ -45,24 +41,21 @@ export const CartProvider = ({ children }) => {
           image: product.image,
           quantity: 1,
           subtotal: product.price,
+          note: "",
         },
       ];
     });
   };
 
-  // ─── Remove Item from Cart ─────────────────────────────────────────────────
   const removeFromCart = (productId) => {
     setCartItems((prev) => prev.filter((item) => item._id !== productId));
   };
 
-  // ─── Update Item Quantity ──────────────────────────────────────────────────
   const updateQuantity = (productId, newQty) => {
-    // If quantity goes to 0 or below, remove the item
     if (newQty <= 0) {
       removeFromCart(productId);
       return;
     }
-
     setCartItems((prev) =>
       prev.map((item) =>
         item._id === productId
@@ -72,29 +65,34 @@ export const CartProvider = ({ children }) => {
     );
   };
 
-  // ─── Clear Entire Cart ─────────────────────────────────────────────────────
+  // Update the note on an item (e.g. "no onion")
+  const updateItemNote = (productId, note) => {
+    setCartItems((prev) =>
+      prev.map((item) => (item._id === productId ? { ...item, note } : item)),
+    );
+  };
+
   const clearCart = () => {
     setCartItems([]);
     setDiscountPercent(0);
   };
 
-  // ─── Calculated Values ─────────────────────────────────────────────────────
-  // Sum of all item subtotals
+  // ─── Compound Tax Calculation ──────────────────────────────────────────────
   const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
-
-  // Discount amount in RM
   const discountAmount = subtotal * (discountPercent / 100);
-
-  // Amount after discount
   const afterDiscount = subtotal - discountAmount;
 
-  // Tax amount
-  const taxAmount = afterDiscount * (taxRate / 100);
+  // Calculate each tax compounding on previous running total
+  let runningTotal = afterDiscount;
+  const taxBreakdown = activeTaxes.map((tax) => {
+    const base = runningTotal;
+    const amount = base * (tax.rate / 100);
+    runningTotal += amount; // compound — next tax runs on this new total
+    return { name: tax.name, rate: tax.rate, amount, base };
+  });
 
-  // Final total
-  const totalAmount = afterDiscount + taxAmount;
-
-  // Total number of items in cart (sum of all quantities)
+  const totalTaxAmount = taxBreakdown.reduce((sum, t) => sum + t.amount, 0);
+  const totalAmount = afterDiscount + totalTaxAmount;
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
@@ -103,14 +101,16 @@ export const CartProvider = ({ children }) => {
         cartItems,
         discountPercent,
         setDiscountPercent,
-        taxRate,
+        activeTaxes,
+        taxBreakdown,
+        totalTaxAmount,
         addToCart,
         removeFromCart,
         updateQuantity,
+        updateItemNote,
         clearCart,
         subtotal,
         discountAmount,
-        taxAmount,
         totalAmount,
         totalItems,
       }}
@@ -120,5 +120,4 @@ export const CartProvider = ({ children }) => {
   );
 };
 
-// Custom hook for easy access
 export const useCart = () => useContext(CartContext);

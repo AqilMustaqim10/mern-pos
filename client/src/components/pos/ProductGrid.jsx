@@ -1,7 +1,10 @@
+// Replace the entire file with this animated version
+
 import React, { useState, useEffect } from "react";
 import { fetchProducts } from "../../api/productAPI";
 import { fetchCategories } from "../../api/categoryAPI";
 import { useCart } from "../../context/CartContext";
+import { useStaggered, useClickFeedback } from "../../hooks/useAnimation";
 import toast from "react-hot-toast";
 
 const ProductGrid = () => {
@@ -11,10 +14,12 @@ const ProductGrid = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Get addToCart function from cart context
-  const { addToCart } = useCart();
+  // Track which card was just clicked for pop animation
+  const [clickedId, setClickedId] = useState(null);
 
-  // Load products and categories when component mounts
+  const { addToCart } = useCart();
+  const { getStaggerStyle } = useStaggered(0, 30);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -34,37 +39,59 @@ const ProductGrid = () => {
     }
   };
 
-  // ─── Handle Add to Cart ────────────────────────────────────────────────────
   const handleAddToCart = (product) => {
-    // Check if product is out of stock
     if (product.stock <= 0) {
       toast.error(`${product.name} is out of stock`);
       return;
     }
+
+    // Trigger scale pop animation on the clicked card
+    setClickedId(product._id);
+    setTimeout(() => setClickedId(null), 200); // reset after animation
+
     addToCart(product);
-    // Small feedback — don't toast every click, it's too noisy for POS
   };
 
-  // ─── Filter Products ───────────────────────────────────────────────────────
   const filteredProducts = products.filter((product) => {
-    // Filter by search term
     const matchesSearch = product.name
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
-
-    // Filter by category
     const matchesCategory =
       selectedCategory === "all" || product.category?._id === selectedCategory;
-
     return matchesSearch && matchesCategory;
   });
 
+  // Loading skeleton — shows while data loads
   if (loading) {
-    return <div style={styles.loading}>Loading products...</div>;
+    return (
+      <div style={styles.container}>
+        <div style={styles.searchRow}>
+          <div className="skeleton" style={{ height: "40px", width: "100%" }} />
+        </div>
+        <div style={styles.grid}>
+          {/* Show 8 skeleton cards while loading */}
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} style={styles.productCard}>
+              <div className="skeleton" style={{ paddingTop: "100%" }} />
+              <div style={{ padding: "10px 12px" }}>
+                <div
+                  className="skeleton"
+                  style={{ height: "14px", marginBottom: "6px" }}
+                />
+                <div
+                  className="skeleton"
+                  style={{ height: "14px", width: "60%" }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} className="page-enter">
       {/* ── Search Bar ── */}
       <div style={styles.searchRow}>
         <input
@@ -76,11 +103,11 @@ const ProductGrid = () => {
         />
       </div>
 
-      {/* ── Category Filter Tabs ── */}
+      {/* ── Category Tabs ── */}
       <div style={styles.categoryTabs}>
-        {/* "All" tab */}
         <button
           onClick={() => setSelectedCategory("all")}
+          className="btn-press"
           style={{
             ...styles.categoryTab,
             backgroundColor: selectedCategory === "all" ? "#4f46e5" : "#e2e8f0",
@@ -89,12 +116,11 @@ const ProductGrid = () => {
         >
           All
         </button>
-
-        {/* One tab per category */}
         {categories.map((cat) => (
           <button
             key={cat._id}
             onClick={() => setSelectedCategory(cat._id)}
+            className="btn-press"
             style={{
               ...styles.categoryTab,
               backgroundColor:
@@ -110,16 +136,23 @@ const ProductGrid = () => {
       {/* ── Product Grid ── */}
       <div style={styles.grid}>
         {filteredProducts.length === 0 ? (
-          <div style={styles.empty}>No products found</div>
+          <div style={styles.empty} className="anim-fadeIn">
+            No products found
+          </div>
         ) : (
-          filteredProducts.map((product) => (
+          filteredProducts.map((product, index) => (
             <div
               key={product._id}
               onClick={() => handleAddToCart(product)}
+              // Apply stagger animation to each card
+              // Plus scale pop when clicked
+              className={`product-card ${clickedId === product._id ? "anim-scalePop" : ""}`}
               style={{
                 ...styles.productCard,
                 opacity: product.stock <= 0 ? 0.5 : 1,
                 cursor: product.stock <= 0 ? "not-allowed" : "pointer",
+                // Stagger each card's entrance
+                animation: `slideInRight 0.15s ease-out ${index * 25}ms both`,
               }}
             >
               {/* Product Image */}
@@ -131,23 +164,25 @@ const ProductGrid = () => {
                     style={styles.productImage}
                   />
                 ) : (
-                  // Placeholder if no image
                   <div style={styles.imagePlaceholder}>📦</div>
                 )}
 
-                {/* Out of Stock Badge */}
                 {product.stock <= 0 && (
                   <div style={styles.outOfStockBadge}>Out of Stock</div>
                 )}
 
-                {/* Low Stock Badge */}
+                {/* Pulsing low stock badge */}
                 {product.stock > 0 &&
                   product.stock <= product.lowStockAlert && (
-                    <div style={styles.lowStockBadge}>Low: {product.stock}</div>
+                    <div
+                      style={styles.lowStockBadge}
+                      className="low-stock-badge"
+                    >
+                      Low: {product.stock}
+                    </div>
                   )}
               </div>
 
-              {/* Product Info */}
               <div style={styles.productInfo}>
                 <p style={styles.productName}>{product.name}</p>
                 <p style={styles.productPrice}>
@@ -162,7 +197,7 @@ const ProductGrid = () => {
   );
 };
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// Styles are the same as before — keeping them here for completeness
 const styles = {
   container: {
     flex: 1,
@@ -171,7 +206,6 @@ const styles = {
     height: "100%",
     overflow: "hidden",
   },
-  loading: { padding: "40px", textAlign: "center", color: "#718096" },
   searchRow: { padding: "12px 16px", borderBottom: "1px solid #e2e8f0" },
   searchInput: {
     width: "100%",
@@ -186,7 +220,7 @@ const styles = {
     display: "flex",
     gap: "8px",
     padding: "12px 16px",
-    overflowX: "auto", // scroll if too many categories
+    overflowX: "auto",
     borderBottom: "1px solid #e2e8f0",
     flexShrink: 0,
   },
@@ -198,14 +232,13 @@ const styles = {
     fontSize: "13px",
     fontWeight: "600",
     whiteSpace: "nowrap",
-    transition: "all 0.2s",
   },
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
     gap: "12px",
     padding: "16px",
-    overflowY: "auto", // scroll the grid independently
+    overflowY: "auto",
     flex: 1,
   },
   productCard: {
@@ -213,10 +246,9 @@ const styles = {
     borderRadius: "12px",
     overflow: "hidden",
     boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-    transition: "transform 0.15s, box-shadow 0.15s",
-    userSelect: "none", // prevent text selection on click
+    userSelect: "none",
   },
-  imageContainer: { position: "relative", paddingTop: "100%" }, // 1:1 aspect ratio
+  imageContainer: { position: "relative", paddingTop: "100%" },
   productImage: {
     position: "absolute",
     top: 0,

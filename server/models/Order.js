@@ -1,154 +1,82 @@
 const mongoose = require("mongoose");
 
-// ─── Order Item Sub-Schema ─────────────────────────────────────────────────────
-// Each item in an order is stored as a sub-document
-// Sub-documents are embedded inside the parent document (Order)
 const orderItemSchema = new mongoose.Schema({
-  // Reference to the product
   product: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Product",
     required: true,
   },
-
-  // Store product name at time of purchase
-  // Important! Product name might change later, but order history should be preserved
-  name: {
-    type: String,
-    required: true,
-  },
-
-  // Store price at time of purchase (price might change later)
-  price: {
-    type: Number,
-    required: true,
-  },
-
-  // How many of this product was ordered
-  quantity: {
-    type: Number,
-    required: true,
-    min: 1,
-  },
-
-  // price × quantity
-  subtotal: {
-    type: Number,
-    required: true,
-  },
+  name: { type: String, required: true },
+  price: { type: Number, required: true },
+  quantity: { type: Number, required: true, min: 1 },
+  subtotal: { type: Number, required: true },
+  // ── NEW: optional note per item (e.g. "no onion", "extra spicy") ──
+  note: { type: String, default: "" },
 });
 
-// ─── Main Order Schema ─────────────────────────────────────────────────────────
+// ─── Tax Snapshot Sub-Schema ───────────────────────────────────────────────────
+// We snapshot the taxes at the time of the order
+// So future tax changes don't affect old receipts
+const taxSnapshotSchema = new mongoose.Schema({
+  name: { type: String }, // e.g. "Service Charge"
+  rate: { type: Number }, // e.g. 10
+  amount: { type: Number }, // actual RM amount charged
+  // The running total this tax was calculated ON
+  // For compound: service charge base = subtotal
+  //               SST base = subtotal + service charge amount
+  baseAmount: { type: Number },
+});
+
 const orderSchema = new mongoose.Schema(
   {
-    // Auto-generated order number e.g. "ORD-001", "ORD-002"
-    orderNumber: {
-      type: String,
-      unique: true,
-    },
-
-    // Array of items in this order
+    orderNumber: { type: String, unique: true },
     items: [orderItemSchema],
 
-    // Financial breakdown
-    subtotal: {
-      type: Number,
-      required: true, // sum of all item subtotals before discount and tax
-    },
+    // ── Financial breakdown ──
+    subtotal: { type: Number, required: true },
+    discountAmount: { type: Number, default: 0 },
+    discountPercent: { type: Number, default: 0 },
 
-    // Discount amount in RM (not percentage)
-    discountAmount: {
-      type: Number,
-      default: 0,
-    },
+    // NEW: array of applied taxes with their amounts
+    taxBreakdown: { type: [taxSnapshotSchema], default: [] },
 
-    // Discount percentage applied (stored for receipt display)
-    discountPercent: {
-      type: Number,
-      default: 0,
-    },
+    // Total of all tax amounts combined
+    totalTaxAmount: { type: Number, default: 0 },
 
-    // Tax amount (calculated from taxRate in settings)
-    taxAmount: {
-      type: Number,
-      default: 0,
-    },
+    // Final total = subtotal - discount + all taxes
+    totalAmount: { type: Number, required: true },
 
-    // Tax rate percentage used (e.g. 6 for 6% SST)
-    taxRate: {
-      type: Number,
-      default: 0,
-    },
-
-    // Final amount customer needs to pay
-    // subtotal - discountAmount + taxAmount
-    totalAmount: {
-      type: Number,
-      required: true,
-    },
-
-    // How customer paid
     paymentMethod: {
       type: String,
       enum: ["cash", "card", "ewallet"],
       default: "cash",
     },
-
-    // How much cash customer gave (for cash payments)
-    amountPaid: {
-      type: Number,
-      default: 0,
-    },
-
-    // Change to give back to customer
-    // amountPaid - totalAmount
-    changeAmount: {
-      type: Number,
-      default: 0,
-    },
-
-    // Order status
+    amountPaid: { type: Number, default: 0 },
+    changeAmount: { type: Number, default: 0 },
     status: {
       type: String,
       enum: ["completed", "cancelled", "refunded"],
       default: "completed",
     },
-
-    // Which cashier processed this order
     cashier: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+    customerName: { type: String, default: "Walk-in Customer" },
 
-    // Optional customer name for the receipt
-    customerName: {
-      type: String,
-      default: "Walk-in Customer",
-    },
+    // NEW: table number for FnB
+    tableNumber: { type: String, default: "" },
 
-    // Optional notes
-    notes: {
-      type: String,
-      default: "",
-    },
+    notes: { type: String, default: "" },
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
-// ─── Auto-generate Order Number ────────────────────────────────────────────────
-// Before saving, automatically create a unique order number
-// Format: ORD-00001, ORD-00002, etc.
-orderSchema.pre("save", async function (next) {
-  // Only generate order number for NEW orders (not updates)
+// Auto-generate order number
+orderSchema.pre("save", async function () {
   if (!this.isNew) return;
-
-  // Count how many orders exist and add 1
   const count = await mongoose.model("Order").countDocuments();
-
-  // Pad the number to 5 digits: 1 becomes "00001"
   this.orderNumber = `ORD-${String(count + 1).padStart(5, "0")}`;
 });
 

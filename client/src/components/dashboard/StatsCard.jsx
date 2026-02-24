@@ -1,11 +1,27 @@
 import React from "react";
+import { useCountUp } from "../../hooks/useAnimation";
 
-// A reusable card that displays a single statistic
-// Used for: Today's Sales, Total Orders, etc.
 const StatsCard = ({ title, value, subtitle, icon, color, trend }) => {
+  // Parse numeric value for count-up animation
+  // If value is "RM 1200.00", extract 1200.00
+  // If value is just a number like 42, use it directly
+  const numericValue = parseFloat(String(value).replace(/[^0-9.]/g, "")) || 0;
+  const prefix = String(value).startsWith("RM") ? "RM " : "";
+  const isDecimal = String(value).includes(".");
+
+  // Animate the number counting up on load
+  const animatedNum = useCountUp(numericValue, 500);
+
+  // Format the animated number
+  const displayValue = prefix
+    ? `${prefix}${animatedNum.toFixed(isDecimal ? 2 : 0)}`
+    : Math.round(animatedNum).toString();
+
   return (
-    <div style={{ ...styles.card, borderTop: `4px solid ${color}` }}>
-      {/* Top row: title and icon */}
+    <div
+      className="stats-card anim-slideInUp"
+      style={{ ...styles.card, borderTop: `4px solid ${color}` }}
+    >
       <div style={styles.topRow}>
         <p style={styles.title}>{title}</p>
         <span style={{ ...styles.iconBox, backgroundColor: color + "22" }}>
@@ -13,13 +29,13 @@ const StatsCard = ({ title, value, subtitle, icon, color, trend }) => {
         </span>
       </div>
 
-      {/* Main value — the big number */}
-      <p style={{ ...styles.value, color }}>{value}</p>
+      {/* Animated count-up number */}
+      <p style={{ ...styles.value, color }} className="anim-countUp">
+        {displayValue}
+      </p>
 
-      {/* Subtitle — e.g. "This month: RM 1,200" */}
       {subtitle && <p style={styles.subtitle}>{subtitle}</p>}
 
-      {/* Optional trend indicator */}
       {trend && (
         <p
           style={{ ...styles.trend, color: trend >= 0 ? "#48bb78" : "#fc8181" }}
@@ -62,20 +78,9 @@ const styles = {
     justifyContent: "center",
     fontSize: "20px",
   },
-  value: {
-    fontSize: "28px",
-    fontWeight: "800",
-    marginBottom: "4px",
-  },
-  subtitle: {
-    fontSize: "12px",
-    color: "#a0aec0",
-  },
-  trend: {
-    fontSize: "12px",
-    fontWeight: "600",
-    marginTop: "6px",
-  },
+  value: { fontSize: "28px", fontWeight: "800", marginBottom: "4px" },
+  subtitle: { fontSize: "12px", color: "#a0aec0" },
+  trend: { fontSize: "12px", fontWeight: "600", marginTop: "6px" },
 };
 
 export default StatsCard;

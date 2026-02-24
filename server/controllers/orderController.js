@@ -1,34 +1,69 @@
+// server/controllers/orderController.js
+
 const Order = require("../models/Order");
 const Product = require("../models/Product");
+const Settings = require("../models/Settings");
 
-// ─── Create Order (Checkout) ───────────────────────────────────────────────────
-// POST /api/orders
-// This is called when cashier clicks "Confirm Payment"
+// ─── Compound Tax Calculator ───────────────────────────────────────────────────
+// Compound means each tax is applied ON TOP of the previous running total
+// Example:
+//   Subtotal after discount = RM 100
+//   Service Charge 10% → 100 × 10% = RM 10   → running total = RM 110
+//   SST 6%           → 110 × 6%  = RM 6.60  → running total = RM 116.60
+const calculateCompoundTaxes = (afterDiscount, taxes) => {
+  // Sort taxes by their order field (lowest first = applied first)
+  const sortedTaxes = [...taxes]
+    .filter((t) => t.enabled) // only use enabled taxes
+    .sort((a, b) => a.order - b.order); // sort by application order
+
+  let runningTotal = afterDiscount; // start with the discounted subtotal
+  const taxBreakdown = [];
+
+  for (const tax of sortedTaxes) {
+    const baseAmount = runningTotal; // THIS tax is calculated on running total
+    const taxAmount = baseAmount * (tax.rate / 100);
+
+    taxBreakdown.push({
+      name: tax.name,
+      rate: tax.rate,
+      amount: parseFloat(taxAmount.toFixed(2)),
+      baseAmount: parseFloat(baseAmount.toFixed(2)),
+    });
+
+    // Add this tax amount to running total
+    // So the NEXT tax compounds on top of it
+    runningTotal += taxAmount;
+  }
+
+  const totalTaxAmount = taxBreakdown.reduce((sum, t) => sum + t.amount, 0);
+
+  return { taxBreakdown, totalTaxAmount, finalTotal: runningTotal };
+};
+
+// ─── Create Order ──────────────────────────────────────────────────────────────
 const createOrder = async (req, res) => {
   try {
     const {
-      items, // array of { productId, quantity }
-      discountPercent, // discount percentage e.g. 10 for 10%
-      taxRate, // tax percentage e.g. 6 for 6%
-      paymentMethod, // 'cash', 'card', 'ewallet'
-      amountPaid, // how much customer gave
+      items,
+      discountPercent,
+      paymentMethod,
+      amountPaid,
       customerName,
+      tableNumber, // NEW: table number for FnB
       notes,
     } = req.body;
 
-    // Validate: must have items
     if (!items || items.length === 0) {
       return res
         .status(400)
         .json({ message: "Order must have at least one item" });
     }
 
-    // ─── Process Each Item ──────────────────────────────────────────────────
+    // ── Process items ──
     const orderItems = [];
     let subtotal = 0;
 
     for (const item of items) {
-      // Fetch product from database to get current price and check stock
       const product = await Product.findById(item.productId);
 
       if (!product) {
@@ -36,14 +71,11 @@ const createOrder = async (req, res) => {
           .status(404)
           .json({ message: `Product not found: ${item.productId}` });
       }
-
       if (!product.isActive) {
         return res
           .status(400)
-          .json({ message: `Product is no longer available: ${product.name}` });
+          .json({ message: `${product.name} is no longer available` });
       }
-
-      // Check if enough stock is available
       if (product.stock < item.quantity) {
         return res.status(400).json({
           message: `Insufficient stock for ${product.name}. Available: ${product.stock}`,
@@ -55,84 +87,76 @@ const createOrder = async (req, res) => {
 
       orderItems.push({
         product: product._id,
-        name: product.name, // snapshot of name at purchase time
-        price: product.price, // snapshot of price at purchase time
+        name: product.name,
+        price: product.price,
         quantity: item.quantity,
         subtotal: itemSubtotal,
+        note: item.note || "", // NEW: pass item note through
       });
 
-      // Deduct stock — reduce stock count for this product
       product.stock -= item.quantity;
       await product.save();
     }
 
-    // ─── Calculate Totals ───────────────────────────────────────────────────
-    // Discount amount in RM
+    // ── Calculate discount ──
     const discountAmount = subtotal * ((discountPercent || 0) / 100);
-
-    // Amount after discount
     const afterDiscount = subtotal - discountAmount;
 
-    // Tax amount
-    const taxAmount = afterDiscount * ((taxRate || 0) / 100);
+    // ── Load current tax settings from database ──
+    const settings = await Settings.findOne();
+    const activeTaxes = settings?.taxes || [];
 
-    // Final total
-    const totalAmount = afterDiscount + taxAmount;
+    // ── Calculate compound taxes ──
+    const { taxBreakdown, totalTaxAmount, finalTotal } = calculateCompoundTaxes(
+      afterDiscount,
+      activeTaxes,
+    );
 
-    // Change to return to customer
-    const changeAmount = (amountPaid || 0) - totalAmount;
+    // ── Change calculation ──
+    const changeAmount = Math.max(0, (amountPaid || 0) - finalTotal);
 
-    // ─── Create Order Document ──────────────────────────────────────────────
+    // ── Create order ──
     const order = await Order.create({
       items: orderItems,
       subtotal,
       discountPercent: discountPercent || 0,
       discountAmount,
-      taxRate: taxRate || 0,
-      taxAmount,
-      totalAmount,
+      taxBreakdown,
+      totalTaxAmount: parseFloat(totalTaxAmount.toFixed(2)),
+      totalAmount: parseFloat(finalTotal.toFixed(2)),
       paymentMethod,
-      amountPaid: amountPaid || totalAmount,
-      changeAmount: changeAmount > 0 ? changeAmount : 0,
-      cashier: req.user._id, // from protect middleware
+      amountPaid: amountPaid || finalTotal,
+      changeAmount,
+      cashier: req.user._id,
       customerName: customerName || "Walk-in Customer",
+      tableNumber: tableNumber || "",
       notes,
     });
 
-    // Populate cashier info for the response
     await order.populate("cashier", "name");
 
-    res.status(201).json({
-      message: "Order created successfully",
-      order,
-    });
+    res.status(201).json({ message: "Order created successfully", order });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 // ─── Get All Orders ────────────────────────────────────────────────────────────
-// GET /api/orders
 const getOrders = async (req, res) => {
   try {
-    // Get optional date filter from query params
     const { startDate, endDate, cashier } = req.query;
-
     let filter = {};
 
-    // Filter by date range if provided
     if (startDate || endDate) {
       filter.createdAt = {};
       if (startDate) filter.createdAt.$gte = new Date(startDate);
       if (endDate) filter.createdAt.$lte = new Date(endDate);
     }
-
-    // Filter by cashier if provided
     if (cashier) filter.cashier = cashier;
 
     const orders = await Order.find(filter)
       .populate("cashier", "name")
-      .sort({ createdAt: -1 }); // newest first
+      .sort({ createdAt: -1 });
 
     res.status(200).json({ count: orders.length, orders });
   } catch (error) {
@@ -141,17 +165,13 @@ const getOrders = async (req, res) => {
 };
 
 // ─── Get Single Order ──────────────────────────────────────────────────────────
-// GET /api/orders/:id
 const getOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
       .populate("cashier", "name")
       .populate("items.product", "name image");
 
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
+    if (!order) return res.status(404).json({ message: "Order not found" });
     res.status(200).json({ order });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
@@ -159,24 +179,18 @@ const getOrder = async (req, res) => {
 };
 
 // ─── Get Today's Summary ───────────────────────────────────────────────────────
-// GET /api/orders/summary/today
-// Used for the dashboard stats
 const getTodaySummary = async (req, res) => {
   try {
-    // Get start and end of today
     const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0); // midnight
-
+    startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999); // end of day
+    endOfDay.setHours(23, 59, 59, 999);
 
-    // Find all completed orders from today
     const orders = await Order.find({
       createdAt: { $gte: startOfDay, $lte: endOfDay },
       status: "completed",
     });
 
-    // Calculate summary stats
     const totalSales = orders.reduce((sum, o) => sum + o.totalAmount, 0);
     const totalOrders = orders.length;
     const totalItems = orders.reduce(
@@ -184,12 +198,7 @@ const getTodaySummary = async (req, res) => {
       0,
     );
 
-    res.status(200).json({
-      totalSales,
-      totalOrders,
-      totalItems,
-      orders,
-    });
+    res.status(200).json({ totalSales, totalOrders, totalItems, orders });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
