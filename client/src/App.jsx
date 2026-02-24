@@ -1,56 +1,56 @@
-// client/src/App.jsx
-
 import React from "react";
-
-// BrowserRouter provides URL-based navigation
-// Routes is the container for all route definitions
-// Route defines a single path-to-component mapping
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
 } from "react-router-dom";
-
-// Toast notifications provider — wraps entire app
 import { Toaster } from "react-hot-toast";
-
-// Our global auth state provider
 import { AuthProvider } from "./context/AuthContext";
-
-// The protected route wrapper
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminLayout from "./components/AdminLayout";
 
 // Pages
 import LoginPage from "./pages/auth/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import POSPage from "./pages/POSPage";
+import CategoriesPage from "./pages/admin/CategoriesPage";
+import ProductsPage from "./pages/admin/ProductsPage";
+
+// Helper component — wraps admin pages with the sidebar layout
+// Keeps App.jsx clean and avoids repeating AdminLayout everywhere
+const AdminPage = ({ component: Component }) => (
+  <ProtectedRoute allowedRoles={["admin"]}>
+    <AdminLayout>
+      <Component />
+    </AdminLayout>
+  </ProtectedRoute>
+);
 
 function App() {
   return (
-    // AuthProvider wraps everything so all components can access auth state
     <AuthProvider>
-      {/* Router enables navigation between pages */}
       <Router>
-        {/* Toaster renders toast notification popups */}
         <Toaster position="top-right" />
-
-        {/* Routes — only the matching route renders */}
         <Routes>
-          {/* Public route — anyone can visit /login */}
+          {/* Public */}
           <Route path="/login" element={<LoginPage />} />
 
-          {/* Protected route — only logged in admins can visit /dashboard */}
+          {/* Admin pages — all wrapped in AdminLayout with sidebar */}
           <Route
             path="/dashboard"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
+            element={<AdminPage component={DashboardPage} />}
+          />
+          <Route
+            path="/admin/categories"
+            element={<AdminPage component={CategoriesPage} />}
+          />
+          <Route
+            path="/admin/products"
+            element={<AdminPage component={ProductsPage} />}
           />
 
-          {/* Protected route — admins and cashiers can visit /pos */}
+          {/* Cashier/Admin POS Screen */}
           <Route
             path="/pos"
             element={
@@ -60,7 +60,7 @@ function App() {
             }
           />
 
-          {/* Catch-all — redirect unknown URLs to login */}
+          {/* Redirect unknown routes */}
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>
