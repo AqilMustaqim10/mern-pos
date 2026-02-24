@@ -1,43 +1,41 @@
-// server/server.js
-
-// Load environment variables from .env file
-// This must be at the very top before anything else
 require("dotenv").config();
-
-// Import Express framework
 const express = require("express");
-
-// Import CORS so our React app can communicate with this server
 const cors = require("cors");
-
-// Import our database connection function (we'll create this next)
 const connectDB = require("./config/db");
 
-// Create the Express application
+// Import auth routes
+const authRoutes = require("./routes/authRoutes");
+
 const app = express();
 
-// ─── Connect to MongoDB ───────────────────────────────────────────────────────
-// Call the function that connects to our database
+// Connect to MongoDB
 connectDB();
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
-// Enable CORS — allows requests from our React frontend (different port)
 app.use(cors());
-
-// Enable Express to read JSON from request bodies
-// Without this, req.body would be undefined
 app.use(express.json());
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-// A simple test route to confirm the server is running
+// Test route
 app.get("/", (req, res) => {
   res.json({ message: "MERN POS API is running!" });
 });
 
-// ─── Start Server ─────────────────────────────────────────────────────────────
-// Use the PORT from .env file, or fallback to 5000
-const PORT = process.env.PORT || 5000;
+// Mount auth routes at /api/auth
+// So: /api/auth/login, /api/auth/register, /api/auth/me
+app.use("/api/auth", authRoutes);
 
+// ─── Global Error Handler ─────────────────────────────────────────────────────
+// Catches any errors that weren't handled in routes
+// Must have 4 parameters: err, req, res, next
+app.use((err, req, res, next) => {
+  console.error(err.stack); // log the full error in terminal
+  res
+    .status(500)
+    .json({ message: "Something went wrong!", error: err.message });
+});
+
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
