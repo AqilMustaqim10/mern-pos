@@ -16,6 +16,7 @@ import DashboardPage from "./pages/DashboardPage";
 import POSPage from "./pages/POSPage";
 import CategoriesPage from "./pages/admin/CategoriesPage";
 import ProductsPage from "./pages/admin/ProductsPage";
+import OrdersPage from "./pages/admin/OrdersPage";
 
 // Helper component — wraps admin pages with the sidebar layout
 // Keeps App.jsx clean and avoids repeating AdminLayout everywhere
@@ -40,6 +41,10 @@ function App() {
           <Route
             path="/dashboard"
             element={<AdminPage component={DashboardPage} />}
+          />
+          <Route
+            path="/admin/orders"
+            element={<AdminPage component={OrdersPage} />}
           />
           <Route
             path="/admin/categories"

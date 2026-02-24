@@ -18,6 +18,8 @@ const AdminLayout = ({ children }) => {
     { path: "/dashboard", label: "📊 Dashboard" },
     { path: "/admin/categories", label: "🏷️ Categories" },
     { path: "/admin/products", label: "📦 Products" },
+    { path: "/admin/orders", label: "🧾 Orders" },
+    { path: "/admin/users", label: "👥 Users" },
     { path: "/pos", label: "🛒 POS Screen" },
   ];
 
@@ -84,7 +86,6 @@ const styles = {
     textDecoration: "none",
     fontSize: "14px",
     fontWeight: "500",
-    borderRadius: "0",
     transition: "all 0.2s",
     margin: "2px 8px",
     borderRadius: "8px",
