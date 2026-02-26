@@ -400,35 +400,105 @@ Each tax is stored as a snapshot on the order so historical receipts are always 
 
 ## 🚢 Deployment
 
-### Deploy Backend to Render
+### Deploy Backend to Railway (Recommended)
 
-1. Go to [render.com](https://render.com) and create a free account
-2. Click **New → Web Service**
-3. Connect your GitHub repository
-4. Set these values:
-   - **Root Directory:** `server`
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start`
-5. Add all environment variables from your `.env` file
-6. Click **Deploy**
-7. Copy the deployed URL (e.g. `https://mern-pos-api.onrender.com`)
+[Railway](https://railway.app) is used instead of Render because it has **no sleep/inactive timeout** — your server stays always on for free.
+
+1. Go to [railway.app](https://railway.app) and sign up with GitHub
+2. Click **New Project → Deploy from GitHub repo**
+3. Select your `mern-pos` repository
+4. Click on the deployed service → **Settings** tab
+5. Set **Root Directory** to `server`
+6. Click **Variables** tab and add all environment variables:
+   ```
+   MONGO_URI              = mongodb+srv://user:pass@cluster.mongodb.net/posdb
+   JWT_SECRET             = your_long_random_secret
+   CLOUDINARY_CLOUD_NAME  = your_cloud_name
+   CLOUDINARY_API_KEY     = your_api_key
+   CLOUDINARY_API_SECRET  = your_api_secret
+   NODE_ENV               = production
+   PORT                   = 5000
+   ```
+7. Click **Settings → Networking → Generate Domain**
+8. Copy your Railway URL (e.g. `https://mern-pos-production.up.railway.app`)
+
+> **Note:** Every push to `main` on GitHub triggers an automatic redeploy on Railway.
+
+---
 
 ### Deploy Frontend to Vercel
 
-1. Go to [vercel.com](https://vercel.com) and create a free account
-2. Click **New Project** and import your GitHub repo
+1. Go to [vercel.com](https://vercel.com) and sign up with GitHub
+2. Click **New Project** and import your `mern-pos` repo
 3. Set these values:
    - **Root Directory:** `client`
    - **Framework Preset:** Vite
+   - **Build Command:** `npm run build`
+   - **Output Directory:** `dist`
 4. Add environment variable:
    ```
-   VITE_API_URL=https://mern-pos-api.onrender.com/api
+   VITE_API_URL = https://mern-pos-production.up.railway.app/api
    ```
+   > ⚠️ Must start with `https://` and end with `/api` — no trailing slash
 5. Click **Deploy**
+6. Get your Vercel URL (e.g. `https://mern-pos-phi.vercel.app`)
+
+---
+
+### Fix React Router on Vercel
+
+Create `client/vercel.json` to handle SPA routing — without this all routes except `/` return 404:
+
+```json
+{
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+```
+
+---
+
+### Create First Admin Account
+
+After deploying, open your browser console on your Vercel URL and run:
+
+```javascript
+fetch("https://mern-pos-production.up.railway.app/api/auth/register", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    name: "Admin",
+    email: "admin@yourstore.com",
+    password: "yourpassword",
+    role: "admin",
+  }),
+})
+  .then((r) => r.json())
+  .then(console.log);
+```
+
+Then log in normally at your Vercel URL.
+
+---
+
+### Live URLs
+
+| Service        | Provider      | URL                                          |
+| -------------- | ------------- | -------------------------------------------- |
+| 🖥️ Frontend    | Vercel        | `https://mern-pos-phi.vercel.app`            |
+| ⚙️ Backend API | Railway       | `https://mern-pos-production.up.railway.app` |
+| 🗄️ Database    | MongoDB Atlas | Cloud                                        |
+| 🖼️ Images      | Cloudinary    | Cloud                                        |
+
+---
 
 ### Update Frontend API URL
 
-After deploying backend, update `client/src/api/axios.js`:
+`client/src/api/axios.js` uses the environment variable automatically:
 
 ```javascript
 const API = axios.create({
@@ -468,19 +538,6 @@ npm run preview # Preview production build
 
 ---
 
-## 🛠️ Planned Improvements
-
-- [ ] Barcode scanner integration
-- [ ] Customer loyalty / points system
-- [ ] Inventory restocking with supplier management
-- [ ] Export reports to Excel/PDF
-- [ ] Dark mode
-- [ ] Multi-branch / multi-store support
-- [ ] Offline mode with sync
-- [ ] Mobile app (React Native)
-
----
-
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -497,9 +554,9 @@ This project is licensed under the **MIT License** — feel free to use it for p
 
 ---
 
-## 👨‍💻 Developer
+## 👨‍💻 Author
 
-Built by AqilMustaqim
+Built step by step with ❤️ using Claude AI as a teaching assistant.
 
 ---
 
@@ -507,6 +564,6 @@ Built by AqilMustaqim
 
 - [MongoDB Atlas](https://cloud.mongodb.com) — free cloud database
 - [Cloudinary](https://cloudinary.com) — free image hosting
-- [Render](https://render.com) — free backend hosting
+- [Railway](https://railway.app) — backend hosting (no sleep timeout)
 - [Vercel](https://vercel.com) — free frontend hosting
 - [Recharts](https://recharts.org) — React chart library
