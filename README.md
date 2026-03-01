@@ -556,7 +556,7 @@ This project is licensed under the **MIT License** — feel free to use it for p
 
 ## 👨‍💻 Author
 
-Built step by step with ❤️ using Claude AI as a teaching assistant.
+Built by Built by AqilMustaqim
 
 ---
 
